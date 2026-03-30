@@ -3,7 +3,6 @@ import plotly.graph_objects as go
 import pandas as pd
 import requests
 import io
-from datetime import datetime
 
 st.set_page_config(page_title="Economic Dashboard", layout="wide")
 
@@ -41,9 +40,15 @@ def load_data():
 
         # -------- Trends --------
         trends = pd.read_excel(file, sheet_name="Trends", engine="openpyxl")
+
+        # CLEAN YEARS SAFELY
+        trends = trends.dropna(subset=["YEAR"])
+        trends["YEAR"] = pd.to_numeric(trends["YEAR"], errors="coerce")
+        trends = trends.dropna(subset=["YEAR"])
         trends["YEAR"] = trends["YEAR"].astype(int)
 
         years = trends["YEAR"].tolist()
+
         trend_data = {
             col: trends[col].tolist()
             for col in trends.columns if col != "YEAR"
@@ -53,9 +58,19 @@ def load_data():
         file.seek(0)
         schemes_df = pd.read_excel(file, sheet_name="Schemes", engine="openpyxl")
 
-        # Normalize columns
-        schemes_df["Variable"] = schemes_df["Variable"].astype(str).str.strip().str.lower()
+        # CLEAN SCHEMES SAFELY
+        schemes_df = schemes_df.dropna(subset=["Year", "Variable"])
+
+        schemes_df["Year"] = pd.to_numeric(schemes_df["Year"], errors="coerce")
+        schemes_df = schemes_df.dropna(subset=["Year"])
         schemes_df["Year"] = schemes_df["Year"].astype(int)
+
+        schemes_df["Variable"] = (
+            schemes_df["Variable"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+        )
 
         schemes_data = {}
 
@@ -111,7 +126,7 @@ if st.session_state.current_page == "detail":
 
     fig = go.Figure()
 
-    # Main line
+    # MAIN LINE
     fig.add_trace(go.Scatter(
         x=years,
         y=values,
@@ -124,7 +139,7 @@ if st.session_state.current_page == "detail":
 
     if schemes:
         for scheme in schemes:
-            year = int(scheme["year"])
+            year = scheme["year"]
 
             if year in years:
                 idx = years.index(year)
@@ -150,7 +165,8 @@ if st.session_state.current_page == "detail":
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # ========= DEBUG (remove later) =========
+    # -------- DEBUG --------
     with st.expander("🔍 Debug Info"):
-        st.write("Available Variables in Schemes:", schemes_data.keys())
-        st.write("Schemes for this variable:", schemes)
+        st.write("Years:", years[:10])
+        st.write("Schemes Data:", schemes)
+        st.write("Variables in Schemes DF (raw):", list(schemes_data.keys()))
