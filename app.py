@@ -2,7 +2,9 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 import os
+import requests
 from datetime import datetime
+import io
 
 # Page configuration
 st.set_page_config(page_title="Economic Trends", layout="wide")
@@ -50,128 +52,91 @@ if 'edit_scheme' not in st.session_state:
 if 'show_details' not in st.session_state:
     st.session_state.show_details = None
 
-# ============ SAMPLE DATA (FALLBACK) ============
-def get_sample_trend_data():
-    years = list(range(2015, 2026))
-    trend_data = {
-        "GDP": [8.0, 8.3, 6.8, 6.4, 3.9, -5.8, 9.7, 7.2, 7.5, 6.5, 7.0],
-        "Inflation": [5.2, 4.9, 4.5, 4.8, 5.5, 5.1, 4.7, 5.3, 5.8, 5.4, 5.6]
-    }
-    return years, trend_data
-
-def get_sample_schemes_data():
-    return {
-        "GDP": [
-            {"year": 2016, "name": "Make in India", "details": "Launched to boost manufacturing sector", "url": "#", "image": None},
-            {"year": 2018, "name": "GST Implementation", "details": "Unified tax structure", "url": "#", "image": None},
-            {"year": 2020, "name": "Atmanirbhar Bharat", "details": "Self-reliant India campaign", "url": "#", "image": None},
-            {"year": 2022, "name": "PLI Schemes", "details": "Production Linked Incentive", "url": "#", "image": None}
-        ],
-        "Inflation": [
-            {"year": 2016, "name": "Demonetization", "details": "Withdrawal of ₹500 and ₹1000 notes", "url": "#", "image": None},
-            {"year": 2019, "name": "RBI Rate Cuts", "details": "5 consecutive rate cuts", "url": "#", "image": None},
-            {"year": 2020, "name": "COVID-19 Lockdown", "details": "Supply chain disruptions", "url": "#", "image": None},
-            {"year": 2022, "name": "Rate Hikes", "details": "RBI hikes repo rate", "url": "#", "image": None}
-        ]
-    }
-
-def get_sample_nobel_data():
-    return [
-        {"year": 2019, "name": "Abhijit Banerjee, Esther Duflo, Michael Kremer", "contribution": "For experimental approach to poverty alleviation"},
-        {"year": 2020, "name": "Paul Milgrom, Robert Wilson", "contribution": "For improvements to auction theory"},
-        {"year": 2021, "name": "David Card, Joshua Angrist, Guido Imbens", "contribution": "For contributions to labor economics"},
-        {"year": 2022, "name": "Ben Bernanke, Douglas Diamond, Philip Dybvig", "contribution": "For research on banks and financial crises"},
-        {"year": 2023, "name": "Claudia Goldin", "contribution": "For understanding women's labor market outcomes"}
-    ]
-
-def get_sample_census_data():
-    return [
-        {"year": 1951, "population_crores": 36.1, "literacy_rate": 18.3, "urban_population": 17.3, "sex_ratio": 946, "density_per_sqkm": 117},
-        {"year": 1961, "population_crores": 43.9, "literacy_rate": 28.3, "urban_population": 18.0, "sex_ratio": 941, "density_per_sqkm": 142},
-        {"year": 1971, "population_crores": 54.8, "literacy_rate": 34.5, "urban_population": 20.2, "sex_ratio": 930, "density_per_sqkm": 177},
-        {"year": 1981, "population_crores": 68.3, "literacy_rate": 43.6, "urban_population": 23.3, "sex_ratio": 934, "density_per_sqkm": 216},
-        {"year": 1991, "population_crores": 84.6, "literacy_rate": 52.2, "urban_population": 25.7, "sex_ratio": 927, "density_per_sqkm": 267},
-        {"year": 2001, "population_crores": 102.9, "literacy_rate": 64.8, "urban_population": 27.8, "sex_ratio": 933, "density_per_sqkm": 324},
-        {"year": 2011, "population_crores": 121.1, "literacy_rate": 74.0, "urban_population": 31.2, "sex_ratio": 943, "density_per_sqkm": 382}
-    ]
-
-# ============ EXCEL DATA LOADING WITH DEBUG ============
-@st.cache_data(ttl=10)
-def load_data_from_excel():
-    """Load data from Excel file with detailed error reporting"""
-    file_path = "economy_data.xlsx"
-    result = {
-        "years": None, "trend_data": None, "schemes_data": None,
-        "nobel_data": None, "census_data": None, "error": None
-    }
-    
-    if not os.path.exists(file_path):
-        result["error"] = f"File '{file_path}' not found in {os.getcwd()}"
-        return result
-    
+# ============ EXCEL DATA LOADING FROM GITHUB ============
+@st.cache_data(ttl=300)
+def load_data_from_github():
+    """Load Excel file directly from GitHub raw URL"""
     try:
-        # Load Trends sheet
-        trends_df = pd.read_excel(file_path, sheet_name='Trends')
-        result["years"] = trends_df['YEAR'].tolist()
-        result["trend_data"] = {}
-        if 'GDP' in trends_df.columns:
-            result["trend_data"]['GDP'] = trends_df['GDP'].tolist()
-        if 'Inflation' in trends_df.columns:
-            result["trend_data"]['Inflation'] = trends_df['Inflation'].tolist()
+        # Raw URL from your GitHub file
+        url = "https://raw.githubusercontent.com/davidotrainy-sudo/indian-economy-ugcnet-schemes-app/main/economy_data.xlsx"
+        
+        st.info(f"📥 Loading data from GitHub: {url}")
+        
+        response = requests.get(url)
+        
+        if response.status_code == 200:
+            st.success("✅ Excel file downloaded successfully!")
+            
+            # Read Excel file from memory
+            excel_file = io.BytesIO(response.content)
+            
+            # Load Trends sheet
+            trends_df = pd.read_excel(excel_file, sheet_name='Trends')
+            years = trends_df['YEAR'].tolist()
+            
+            trend_data = {}
+            if 'GDP' in trends_df.columns:
+                trend_data['GDP'] = trends_df['GDP'].tolist()
+            if 'Inflation' in trends_df.columns:
+                trend_data['Inflation'] = trends_df['Inflation'].tolist()
+            
+            # Load Schemes sheet
+            schemes_df = pd.read_excel(excel_file, sheet_name='Schemes')
+            schemes_data = {}
+            for variable in schemes_df['Variable'].unique():
+                schemes_data[variable] = []
+                var_data = schemes_df[schemes_df['Variable'] == variable]
+                for _, row in var_data.iterrows():
+                    scheme = {
+                        "year": float(row['Year']),
+                        "name": str(row['Scheme Name']) if pd.notna(row['Scheme Name']) else "",
+                        "details": str(row['Details']) if pd.notna(row['Details']) else "",
+                        "url": str(row['URL']) if pd.notna(row['URL']) else "#",
+                        "image": str(row['Image']) if 'Image' in row and pd.notna(row['Image']) else None
+                    }
+                    schemes_data[variable].append(scheme)
+            
+            # Load NobelLaureates sheet
+            nobel_data = []
+            try:
+                nobel_df = pd.read_excel(excel_file, sheet_name='NobelLaureates')
+                for _, row in nobel_df.iterrows():
+                    nobel_data.append({
+                        "year": int(row['Year']),
+                        "name": str(row['Name']),
+                        "contribution": str(row['Contribution'])
+                    })
+                nobel_data = sorted(nobel_data, key=lambda x: x['year'])
+            except Exception as e:
+                st.warning(f"NobelLaureates sheet not found: {e}")
+            
+            # Load CensusData sheet
+            census_data = []
+            try:
+                census_df = pd.read_excel(excel_file, sheet_name='CensusData')
+                for _, row in census_df.iterrows():
+                    census_data.append({
+                        "year": int(row['Year']),
+                        "population_crores": float(row['Population_Crores']),
+                        "literacy_rate": float(row['Literacy_Rate']),
+                        "urban_population": float(row['Urban_Population_Percent']),
+                        "sex_ratio": int(row['Sex_Ratio']),
+                        "density_per_sqkm": int(row['Density_Per_SqKm'])
+                    })
+                census_data = sorted(census_data, key=lambda x: x['year'])
+            except Exception as e:
+                st.warning(f"CensusData sheet not found: {e}")
+            
+            return years, trend_data, schemes_data, nobel_data, census_data
+            
+        else:
+            st.error(f"❌ Failed to download file. Status code: {response.status_code}")
+            st.error("Make sure the file exists at the URL and is accessible")
+            return None, None, None, None, None
+            
     except Exception as e:
-        result["error"] = f"Error loading Trends: {str(e)}"
-        return result
-    
-    try:
-        # Load Schemes sheet
-        schemes_df = pd.read_excel(file_path, sheet_name='Schemes')
-        result["schemes_data"] = {}
-        for variable in schemes_df['Variable'].unique():
-            result["schemes_data"][variable] = []
-            var_data = schemes_df[schemes_df['Variable'] == variable]
-            for _, row in var_data.iterrows():
-                result["schemes_data"][variable].append({
-                    "year": float(row['Year']),
-                    "name": str(row['Scheme Name']) if pd.notna(row['Scheme Name']) else "",
-                    "details": str(row['Details']) if pd.notna(row['Details']) else "",
-                    "url": str(row['URL']) if pd.notna(row['URL']) else "#",
-                    "image": str(row['Image']) if 'Image' in row and pd.notna(row['Image']) else None
-                })
-    except Exception as e:
-        result["error"] = f"Schemes sheet error: {str(e)}"
-    
-    try:
-        # Load NobelLaureates sheet
-        nobel_df = pd.read_excel(file_path, sheet_name='NobelLaureates')
-        result["nobel_data"] = []
-        for _, row in nobel_df.iterrows():
-            result["nobel_data"].append({
-                "year": int(row['Year']),
-                "name": str(row['Name']),
-                "contribution": str(row['Contribution'])
-            })
-        result["nobel_data"] = sorted(result["nobel_data"], key=lambda x: x['year'])
-    except Exception:
-        pass
-    
-    try:
-        # Load CensusData sheet
-        census_df = pd.read_excel(file_path, sheet_name='CensusData')
-        result["census_data"] = []
-        for _, row in census_df.iterrows():
-            result["census_data"].append({
-                "year": int(row['Year']),
-                "population_crores": float(row['Population_Crores']),
-                "literacy_rate": float(row['Literacy_Rate']),
-                "urban_population": float(row['Urban_Population_Percent']),
-                "sex_ratio": int(row['Sex_Ratio']),
-                "density_per_sqkm": int(row['Density_Per_SqKm'])
-            })
-        result["census_data"] = sorted(result["census_data"], key=lambda x: x['year'])
-    except Exception:
-        pass
-    
-    return result
+        st.error(f"❌ Error loading from GitHub: {str(e)}")
+        return None, None, None, None, None
 
 # ============ REFRESH BUTTON ============
 def add_refresh_controls():
@@ -205,43 +170,8 @@ def show_scheme_details(scheme):
     st.session_state.show_details = scheme
     st.rerun()
 
-# ============ LOAD DATA ============
-excel_result = load_data_from_excel()
-
-# Use Excel data if available and valid, otherwise use samples
-if excel_result["years"] and excel_result["trend_data"]:
-    years = excel_result["years"]
-    trend_data = excel_result["trend_data"]
-    st.success("✅ Loaded data from economy_data.xlsx")
-else:
-    years, trend_data = get_sample_trend_data()
-    st.info("📊 Using sample trend data. Upload 'economy_data.xlsx' for custom data.")
-
-if excel_result["schemes_data"]:
-    schemes_data = excel_result["schemes_data"]
-else:
-    schemes_data = get_sample_schemes_data()
-
-if excel_result["nobel_data"]:
-    nobel_data = excel_result["nobel_data"]
-else:
-    nobel_data = get_sample_nobel_data()
-
-if excel_result["census_data"]:
-    census_data = excel_result["census_data"]
-else:
-    census_data = get_sample_census_data()
-
-# Show debug info in sidebar (remove after testing)
-with st.sidebar.expander("🔧 Debug Info"):
-    st.write(f"Current directory: {os.getcwd()}")
-    st.write(f"Excel file exists: {os.path.exists('economy_data.xlsx')}")
-    if os.path.exists("economy_data.xlsx"):
-        st.write(f"File size: {os.path.getsize('economy_data.xlsx')} bytes")
-    if excel_result["error"]:
-        st.warning(f"Excel loading error: {excel_result['error']}")
-    st.write(f"Using sample trend data: {not excel_result['years']}")
-    st.write(f"Using sample schemes: {not excel_result['schemes_data']}")
+# ============ LOAD DATA FROM GITHUB ============
+years, trend_data, schemes_data, nobel_data, census_data = load_data_from_github()
 
 # ============ HOME PAGE ============
 if st.session_state.current_page == 'home':
@@ -250,6 +180,19 @@ if st.session_state.current_page == 'home':
     
     add_refresh_controls()
     
+    # Check if data loaded successfully
+    if years is None or trend_data is None:
+        st.error("❌ Failed to load data from Excel file. Please check:")
+        st.markdown("""
+        1. The file exists at: `https://raw.githubusercontent.com/davidotrainy-sudo/indian-economy-ugcnet-schemes-app/main/economy_data.xlsx`
+        2. The file has the required sheets: `Trends`, `Schemes`, `NobelLaureates`, `CensusData`
+        3. The file is publicly accessible
+        """)
+        st.stop()
+    
+    st.success("✅ Data loaded successfully from economy_data.xlsx!")
+    
+    # Data source selector
     st.markdown("---")
     st.subheader("📁 Select Data Source")
     
@@ -270,7 +213,7 @@ if st.session_state.current_page == 'home':
                     if st.button("📈 **Inflation**\n\nPrice Rise (CPI)", key="inflation_btn", width="stretch"):
                         go_to_variable("Inflation")
         else:
-            st.warning("No GDP/Inflation data available.")
+            st.warning("No GDP/Inflation data found in Excel file.")
         
         st.markdown("---")
         st.subheader("🎨 5-Year Plan Color Legend")
@@ -304,7 +247,7 @@ if st.session_state.current_page == 'home':
                 shared_count = sum(1 for n in nobel_data if ',' in n['name'] or ' and ' in n['name'])
                 st.metric("Solo Laureates", len(nobel_data) - shared_count)
         else:
-            st.info("📌 No Nobel Laureate data available.")
+            st.warning("No Nobel Laureate data found in Excel file. Please add 'NobelLaureates' sheet.")
     
     elif selected_data == "Indian Census Data":
         st.markdown("---")
@@ -354,7 +297,7 @@ if st.session_state.current_page == 'home':
                 lit_growth = census_data[-1]['literacy_rate'] - census_data[0]['literacy_rate']
                 st.metric("Literacy Improvement", f"+{lit_growth:.1f}%")
         else:
-            st.info("📌 No Census data available.")
+            st.warning("No Census data found in Excel file. Please add 'CensusData' sheet.")
 
 # ============ VARIABLE DETAIL PAGE ============
 elif st.session_state.current_page == 'variable_detail':
@@ -584,7 +527,7 @@ elif st.session_state.current_page == 'edit_scheme':
                 if schemes_data is not None:
                     schemes_data[variable] = existing_schemes
                 
-                st.success(f"✅ Scheme '{name}' saved! (Excel saving disabled in this version)")
+                st.success(f"✅ Scheme '{name}' saved!")
                 st.session_state.current_page = 'variable_detail'
                 st.session_state.edit_scheme = None
                 st.rerun()
@@ -605,4 +548,4 @@ elif st.session_state.current_page == 'edit_scheme':
 
 # Footer
 st.markdown("---")
-st.markdown("📊 **Data Source:** economy_data.xlsx (if found) | Using sample data as fallback")
+st.markdown("📊 **Data Source:** economy_data.xlsx (loaded directly from GitHub)")
