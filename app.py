@@ -41,7 +41,6 @@ def load_data():
         # -------- Trends --------
         trends = pd.read_excel(file, sheet_name="Trends", engine="openpyxl")
 
-        # CLEAN YEARS SAFELY
         trends = trends.dropna(subset=["YEAR"])
         trends["YEAR"] = pd.to_numeric(trends["YEAR"], errors="coerce")
         trends = trends.dropna(subset=["YEAR"])
@@ -58,7 +57,6 @@ def load_data():
         file.seek(0)
         schemes_df = pd.read_excel(file, sheet_name="Schemes", engine="openpyxl")
 
-        # CLEAN SCHEMES SAFELY
         schemes_df = schemes_df.dropna(subset=["Year", "Variable"])
 
         schemes_df["Year"] = pd.to_numeric(schemes_df["Year"], errors="coerce")
@@ -86,8 +84,7 @@ def load_data():
                     "year": int(row["Year"]),
                     "name": str(row["Scheme Name"]),
                     "details": str(row["Details"]) if pd.notna(row["Details"]) else "",
-                    "url": str(row["URL"]) if pd.notna(row["URL"]) else "#",
-                    "image": str(row["Image"]) if "Image" in schemes_df.columns and pd.notna(row["Image"]) else None
+                    "url": str(row["URL"]) if pd.notna(row["URL"]) else "#"
                 }
                 for _, row in filtered.iterrows()
             ]
@@ -126,47 +123,83 @@ if st.session_state.current_page == "detail":
 
     fig = go.Figure()
 
-    # MAIN LINE
+    # -------- MAIN LINE --------
     fig.add_trace(go.Scatter(
         x=years,
         y=values,
         mode="lines+markers",
-        name=var
+        name=var,
+        line=dict(width=3),
+        marker=dict(size=8)
     ))
 
-    # -------- SCHEMES --------
+    # -------- ADVANCED SCHEME TIMELINE --------
     schemes = schemes_data.get(var, [])
 
     if schemes:
-        for scheme in schemes:
+        offset_step = (max(values) - min(values)) * 0.2
+        direction = 1
+
+        for i, scheme in enumerate(schemes):
             year = scheme["year"]
 
             if year in years:
                 idx = years.index(year)
                 y_val = values[idx]
 
+                # Alternate up/down
+                y_offset = y_val + (offset_step * direction)
+
+                # Alternate left/right
+                x_offset = year + (0.6 if i % 2 == 0 else -0.6)
+
+                direction *= -1
+
+                # Point marker
                 fig.add_trace(go.Scatter(
                     x=[year],
                     y=[y_val],
-                    mode="markers+text",
-                    marker=dict(size=12, symbol="star"),
-                    text=[scheme["name"]],
-                    textposition="top center",
-                    name=scheme["name"],
-                    hovertemplate=f"{scheme['name']}<br>Year: {year}<extra></extra>"
+                    mode="markers",
+                    marker=dict(size=10, color="blue"),
+                    showlegend=False
                 ))
 
+                # Connector line
+                fig.add_trace(go.Scatter(
+                    x=[year, x_offset],
+                    y=[y_val, y_offset],
+                    mode="lines",
+                    line=dict(color="gray", width=1, dash="dot"),
+                    showlegend=False,
+                    hoverinfo="none"
+                ))
+
+                # Label
+                fig.add_trace(go.Scatter(
+                    x=[x_offset],
+                    y=[y_offset],
+                    mode="text",
+                    text=[f"{scheme['name']}<br>{year}"],
+                    textposition="middle center",
+                    textfont=dict(size=10),
+                    showlegend=False
+                ))
+
+    # -------- LAYOUT --------
     fig.update_layout(
         title=f"{var} with Government Schemes",
         xaxis_title="Year",
         yaxis_title=var,
-        height=600
+        height=600,
+        plot_bgcolor="white"
     )
+
+    fig.update_xaxes(showgrid=True)
+    fig.update_yaxes(showgrid=True)
 
     st.plotly_chart(fig, use_container_width=True)
 
     # -------- DEBUG --------
     with st.expander("🔍 Debug Info"):
         st.write("Years:", years[:10])
-        st.write("Schemes Data:", schemes)
-        st.write("Variables in Schemes DF (raw):", list(schemes_data.keys()))
+        st.write("Schemes:", schemes)
