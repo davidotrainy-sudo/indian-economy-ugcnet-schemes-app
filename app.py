@@ -134,55 +134,68 @@ if st.session_state.current_page == "detail":
     ))
 
     # -------- ADVANCED SCHEME TIMELINE --------
-    schemes = schemes_data.get(var, [])
+# ========= RAW TIMELINE + CLEAN HOVER =========
+from collections import defaultdict
 
-    if schemes:
-        offset_step = (max(values) - min(values)) * 0.2
-        direction = 1
+schemes = schemes_data.get(var, [])
 
-        for i, scheme in enumerate(schemes):
-            year = scheme["year"]
+if schemes:
+    offset = (max(values) - min(values)) * 0.15
 
-            if year in years:
-                idx = years.index(year)
-                y_val = values[idx]
+    grouped = defaultdict(list)
 
-                # Alternate up/down
-                y_offset = y_val + (offset_step * direction)
+    for s in schemes:
+        grouped[s["year"]].append(s["name"])
 
-                # Alternate left/right
-                x_offset = year + (0.6 if i % 2 == 0 else -0.6)
+    for year, scheme_names in grouped.items():
+        if year in years:
+            idx = years.index(year)
+            base_y = values[idx]
 
-                direction *= -1
+            # Create clean hover text (THIS IS THE MAGIC)
+            hover_text = "<br>".join([
+                f"{i+1}. {name}" for i, name in enumerate(scheme_names)
+            ])
 
-                # Point marker
+            # Marker at point (with hover)
+            fig.add_trace(go.Scatter(
+                x=[year],
+                y=[base_y],
+                mode="markers",
+                marker=dict(size=12, color="blue"),
+                name=f"{year}",
+                hovertemplate=(
+                    f"<b>Year: {year}</b><br><br>"
+                    f"<b>Schemes:</b><br>{hover_text}"
+                    "<extra></extra>"
+                ),
+                showlegend=False
+            ))
+
+            # Stack labels (still messy visually)
+            for i, name in enumerate(scheme_names):
+                y_offset = base_y + offset + (i * 1.5)
+
+                # vertical line
                 fig.add_trace(go.Scatter(
-                    x=[year],
-                    y=[y_val],
-                    mode="markers",
-                    marker=dict(size=10, color="blue"),
-                    showlegend=False
-                ))
-
-                # Connector line
-                fig.add_trace(go.Scatter(
-                    x=[year, x_offset],
-                    y=[y_val, y_offset],
+                    x=[year, year],
+                    y=[base_y, y_offset],
                     mode="lines",
-                    line=dict(color="gray", width=1, dash="dot"),
+                    line=dict(color="gray", width=1),
                     showlegend=False,
                     hoverinfo="none"
                 ))
 
-                # Label
+                # overlapping labels
                 fig.add_trace(go.Scatter(
-                    x=[x_offset],
+                    x=[year],
                     y=[y_offset],
                     mode="text",
-                    text=[f"{scheme['name']}<br>{year}"],
-                    textposition="middle center",
+                    text=[name],
+                    textposition="top center",
                     textfont=dict(size=10),
-                    showlegend=False
+                    showlegend=False,
+                    hoverinfo="skip"  # IMPORTANT → avoid messy hover
                 ))
 
     # -------- LAYOUT --------
